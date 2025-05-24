@@ -14,15 +14,23 @@ export const initialState: TIngredientState = {
   error: null
 };
 
-export const getIngredients = createAsyncThunk(
-  'ingredient/get',
-  getIngredientsApi
-);
+export const getIngredients = createAsyncThunk('ingredient/get', async () => {
+  try {
+    return await getIngredientsApi();
+  } catch (error) {
+    throw new Error('Failed to load ingredients');
+  }
+});
 
 export const ingredientSlice = createSlice({
   name: 'ingredient',
   initialState,
-  reducers: {},
+  reducers: {
+    resetIngredients: (state) => {
+      state.ingredients = [];
+      state.error = null;
+    }
+  },
   selectors: {
     getIngredientState: (state) => state
   },
@@ -32,17 +40,19 @@ export const ingredientSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(getIngredients.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message as string;
-      })
       .addCase(getIngredients.fulfilled, (state, action) => {
         state.loading = false;
-        state.error = null;
         state.ingredients = action.payload;
+        state.error = null;
+      })
+      .addCase(getIngredients.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Unknown error occurred';
       });
   }
 });
 
+export const { resetIngredients } = ingredientSlice.actions;
 export const { getIngredientState } = ingredientSlice.selectors;
+
 export default ingredientSlice.reducer;

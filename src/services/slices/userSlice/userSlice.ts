@@ -13,7 +13,7 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { deleteCookie, setCookie } from '../../../utils/cookie';
 import { TOrder, TUser } from '@utils-types';
 
-type TUserState = {
+export type TUserState = {
   request: boolean;
   error: string | null;
   response: TUser | null;
@@ -39,18 +39,17 @@ export const initialState: TUserState = {
 
 export const registerUser = createAsyncThunk(
   'user/regUser',
-  async (registerData: TRegisterData) => await registerUserApi(registerData)
+  async (data: TRegisterData) => await registerUserApi(data)
 );
 
 export const loginUser = createAsyncThunk(
   'user/loginUser',
-  async ({ email, password }: TLoginData) => {
-    const data = await loginUserApi({ email, password });
-    if (!data.success) {
-      return data;
+  async (credentials: TLoginData) => {
+    const data = await loginUserApi(credentials);
+    if (data.success) {
+      setCookie('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
     }
-    setCookie('accessToken', data.accessToken);
-    localStorage.setItem('refreshToken', data.refreshToken);
     return data;
   }
 );
@@ -61,14 +60,13 @@ export const getOrdersAll = createAsyncThunk('user/ordersUser', getOrdersApi);
 
 export const updateUser = createAsyncThunk(
   'user/updateUser',
-  async (data: Partial<TRegisterData>) => updateUserApi(data)
+  async (data: Partial<TRegisterData>) => await updateUserApi(data)
 );
 
 export const logoutUser = createAsyncThunk('user/logoutUser', async () => {
-  logoutApi().then(() => {
-    localStorage.clear();
-    deleteCookie('accessToken');
-  });
+  await logoutApi();
+  localStorage.clear();
+  deleteCookie('accessToken');
 });
 
 export const userSlice = createSlice({
@@ -89,33 +87,29 @@ export const userSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(registerUser.pending, (state) => {
-        (state.request = true), (state.error = null);
+        state.request = true;
+        state.error = null;
         state.isAuthChecked = true;
         state.isAuthenticated = false;
       })
-      .addCase(registerUser.rejected, (state, action) => {
-        (state.request = false),
-          (state.error = action.error.message as string),
-          (state.isAuthChecked = false);
-      })
       .addCase(registerUser.fulfilled, (state, action) => {
-        (state.request = false),
-          (state.error = null),
-          (state.response = action.payload.user);
+        state.request = false;
+        state.error = null;
+        state.response = action.payload.user;
         state.userData = action.payload.user;
         state.isAuthChecked = false;
         state.isAuthenticated = true;
+      })
+      .addCase(registerUser.rejected, (state, action) => {
+        state.request = false;
+        state.error = action.error.message || 'Registration failed';
+        state.isAuthChecked = false;
       })
       .addCase(loginUser.pending, (state) => {
         state.loginUserRequest = true;
         state.error = null;
         state.isAuthChecked = true;
         state.isAuthenticated = false;
-      })
-      .addCase(loginUser.rejected, (state, action) => {
-        state.loginUserRequest = false;
-        state.isAuthChecked = false;
-        state.error = action.error.message as string;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.error = null;
@@ -124,15 +118,15 @@ export const userSlice = createSlice({
         state.isAuthenticated = true;
         state.userData = action.payload.user;
       })
+      .addCase(loginUser.rejected, (state, action) => {
+        state.loginUserRequest = false;
+        state.isAuthChecked = false;
+        state.error = action.error.message || 'Login failed';
+      })
       .addCase(getUser.pending, (state) => {
         state.isAuthenticated = true;
         state.isAuthChecked = true;
         state.loginUserRequest = true;
-      })
-      .addCase(getUser.rejected, (state, action) => {
-        state.isAuthenticated = false;
-        state.isAuthChecked = false;
-        state.loginUserRequest = false;
       })
       .addCase(getUser.fulfilled, (state, action) => {
         state.isAuthenticated = true;
@@ -140,16 +134,23 @@ export const userSlice = createSlice({
         state.userData = action.payload.user;
         state.isAuthChecked = false;
       })
-      .addCase(updateUser.pending, (state) => {
-        (state.request = true), (state.error = null);
+      .addCase(getUser.rejected, (state) => {
+        state.isAuthenticated = false;
+        state.isAuthChecked = false;
+        state.loginUserRequest = false;
       })
-      .addCase(updateUser.rejected, (state, action) => {
-        (state.request = false), (state.error = action.error.message as string);
+      .addCase(updateUser.pending, (state) => {
+        state.request = true;
+        state.error = null;
       })
       .addCase(updateUser.fulfilled, (state, action) => {
-        (state.request = false),
-          (state.error = null),
-          (state.response = action.payload.user);
+        state.request = false;
+        state.error = null;
+        state.response = action.payload.user;
+      })
+      .addCase(updateUser.rejected, (state, action) => {
+        state.request = false;
+        state.error = action.error.message || 'Profile update failed';
       })
       .addCase(logoutUser.pending, (state) => {
         state.isAuthenticated = true;
@@ -157,37 +158,37 @@ export const userSlice = createSlice({
         state.error = null;
         state.request = true;
       })
-      .addCase(logoutUser.rejected, (state, action) => {
-        state.isAuthenticated = true;
-        state.isAuthChecked = false;
-        state.error = action.error.message as string;
-        state.request = false;
-      })
       .addCase(logoutUser.fulfilled, (state) => {
         state.isAuthenticated = false;
         state.isAuthChecked = false;
         state.error = null;
         state.request = false;
         state.userData = null;
-        // localStorage.clear();
-        // deleteCookie('accessToken');
       })
+      .addCase(logoutUser.rejected, (state, action) => {
+        state.isAuthenticated = true;
+        state.isAuthChecked = false;
+        state.error = action.error.message || 'Logout failed';
+        state.request = false;
+      })
+
       .addCase(getOrdersAll.pending, (state) => {
         state.error = null;
         state.request = true;
-      })
-      .addCase(getOrdersAll.rejected, (state, action) => {
-        state.error = action.error.message as string;
-        state.request = false;
       })
       .addCase(getOrdersAll.fulfilled, (state, action) => {
         state.error = null;
         state.request = false;
         state.userOrders = action.payload;
+      })
+      .addCase(getOrdersAll.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to fetch orders';
+        state.request = false;
       });
   }
 });
 
 export const { userLogout, resetError } = userSlice.actions;
 export const { getUserState, getError } = userSlice.selectors;
+
 export default userSlice.reducer;
