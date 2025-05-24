@@ -35,5 +35,5 @@ npm start
 npm test
 
 # Запуск Cypress тестов
-npm run cypress:open
+npm run cypress
 ```
